@@ -94,7 +94,7 @@ async def run_broadcast(m: types.Message):
     count = 0
     for uid in users:
         try:
-            await bot.send_message(uid, f"📢 **ОБЪЯВЛЕНИЕ:**\n\n{m.text}")
+            await bot.send_message(uid, f"📢 ОБЪЯВЛЕНИЕ:\n\n{m.text}")
             count += 1
         except: pass
     await m.answer(f"✅ Рассылка завершена!\nПолучили: {count} человек.")
