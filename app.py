@@ -33,7 +33,7 @@ def get_admin_kb():
 @dp.message(Command("start"))
 async def cmd_start(m: types.Message):
     users.add(m.from_user.id)
-    await m.answer(f"Привет! Это магазин **TIMIX METRO**.\nЖми кнопку ниже, чтобы войти.", 
+    await m.answer(f"Привет! Это магазин TIMIX METRO.\nЖми кнопку ниже, чтобы открыть магазин.", 
                    reply_markup=get_main_kb())
     if m.from_user.id in admins:
         await m.answer("🔧 Вы вошли как администратор. Используйте /admin")
