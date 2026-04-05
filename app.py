@@ -1,70 +1,81 @@
-import os, asyncio, json
+import os
+import asyncio
+import json
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import LabeledPrice, PreCheckoutQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-# Берем токен из настроек Koyeb
+# --- НАСТРОЙКИ (Railway берет это из Variables) ---
 TOKEN = os.getenv("BOT_TOKEN")
+OWNER_ID = 8239542728  # ЗАМЕНИ НА СВОЙ ID (узнай в @userinfobot)
+APP_URL = "https://deemiix64-droid.github.io/metrobot/" 
 MANAGER = "@timixXmetro"
-# ТВОЙ ID (для доступа к админке)
-OWNER_ID = 8239542728 
-# Ссылка, которую даст GitHub Pages
-APP_URL = "https://deemiix64-droid.github.io/metro/"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
-admins = set() # Временный список админов в памяти
+users = set() # Список пользователей для рассылки
+
+def main_kb(user_id):
+    kb = [[InlineKeyboardButton(text="🛒 ОТКРЫТЬ МАГАЗИН", web_app=WebAppInfo(url=APP_URL))]]
+    if user_id == OWNER_ID:
+        kb.append([InlineKeyboardButton(text="⚙️ АДМИН-МЕНЮ", callback_data="adm_main")])
+    return InlineKeyboardMarkup(inline_keyboard=kb)
 
 @dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    kb = [[InlineKeyboardButton(text="🛒 МАГАЗИН", web_app=WebAppInfo(url=APP_URL))]]
-    
-    # Если пишет владелец или админ, добавляем кнопку управления
-    if message.from_user.id == OWNER_ID or message.from_user.id in admins:
-        kb.append([InlineKeyboardButton(text="⚙️ Админ-панель", callback_data="adm")])
-        
-    await message.answer(
-        f"👋 Добро пожаловать в TIMIX!\n\nТвой ID: `{message.from_user.id}`",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb),
-        parse_mode="Markdown"
-    )
+async def start(m: types.Message):
+    users.add(m.from_user.id)
+    await m.answer(f"Привет, {m.from_user.first_name}! Это TIMIX METRO.\nВыбирай товары в Mini App ниже:", 
+                   reply_markup=main_kb(m.from_user.id))
 
-@dp.callback_query(F.data == "adm")
-async def adm_panel(call: types.CallbackQuery):
-    await call.message.answer("Чтобы добавить админа, просто перешли мне его ID (числа).")
+# --- АДМИН-ПАНЕЛЬ ---
+@dp.callback_query(F.data == "adm_main")
+async def adm_menu(call: types.CallbackQuery):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="adm_stats")],
+        [InlineKeyboardButton(text="📢 Рассылка", callback_data="adm_broadcast")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="adm_close")]
+    ])
+    await call.message.edit_text("🔧 Управление магазином", reply_markup=kb)
 
-@dp.message(lambda m: m.text.isdigit() and m.from_user.id == OWNER_ID)
-async def add_admin(message: types.Message):
-    admins.add(int(message.text))
-    await message.answer(f"✅ Пользователь {message.text} теперь админ.")
+@dp.callback_query(F.data == "adm_stats")
+async def adm_stats(call: types.CallbackQuery):
+    await call.answer(f"Пользователей в базе: {len(users)}", show_alert=True)
 
-# Обработка покупки из Mini App
+@dp.callback_query(F.data == "adm_broadcast")
+async def adm_bc(call: types.CallbackQuery):
+    await call.message.answer("Напиши текст рассылки (он уйдет всем пользователям):")
+
+@dp.message(F.text, lambda m: m.from_user.id == OWNER_ID and not m.text.startswith('/'))
+async def run_bc(m: types.Message):
+    count = 0
+    for uid in users:
+        try:
+            await bot.send_message(uid, f"📢 **СООБЩЕНИЕ ОТ АДМИНА:**\n\n{m.text}", parse_mode="Markdown")
+            count += 1
+        except: pass
+    await m.answer(f"✅ Рассылка завершена! Получили: {count}")
+
+@dp.callback_query(F.data == "adm_close")
+async def adm_close(call: types.CallbackQuery):
+    await call.message.edit_text("Магазин работает.", reply_markup=main_kb(call.from_user.id))
+
+# --- ОПЛАТА (STARS) ---
 @dp.message(F.web_app_data)
-async def process_buy(message: types.Message):
-    data = json.loads(message.web_app_data.data)
+async def buy_process(m: types.Message):
+    data = json.loads(m.web_app_data.data)
     await bot.send_invoice(
-        chat_id=message.chat.id,
-        title=data['item'],
-        description=f"Оплата товара. Менеджер: {MANAGER}",
-        payload=f"pay_{data['item']}",
-        currency="XTR", # Telegram Stars
-        prices=[LabeledPrice(label="Звезды", amount=int(data['price']))],
+        m.chat.id, title=data['item'], description=f"Оплата товара. Менеджер: {MANAGER}",
+        payload="order", currency="XTR", 
+        prices=[LabeledPrice(label="⭐ Stars", amount=int(data['price']))], 
         provider_token=""
     )
 
 @dp.pre_checkout_query()
-async def pre_checkout(query: PreCheckoutQuery):
-    await query.answer(ok=True)
+async def pre_pay(q: PreCheckoutQuery): await q.answer(ok=True)
 
 @dp.message(F.successful_payment)
-async def success_pay(message: types.Message):
-    await message.answer(
-        f"✅ Оплата прошла!\n\nСделай скриншот и отправь менеджеру: {MANAGER}",
-        parse_mode="Markdown"
-    )
+async def pay_ok(m: types.Message):
+    await m.answer(f"✅ Оплачено! Напиши {MANAGER} для получения.")
 
-async def main():
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+async def main(): await dp.start_polling(bot)
+if __name__ == "__main__": asyncio.run(main())
