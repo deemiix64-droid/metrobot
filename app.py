@@ -18,7 +18,8 @@ async def cmd_start(m: types.Message):
     users.add(m.from_user.id)
     kb = [[KeyboardButton(text="🛒 ОТКРЫТЬ МАГАЗИН", web_app=WebAppInfo(url=APP_URL))]]
     await m.answer(f"Привет! Это **TIMIX METRO**.\nЖми на кнопку ниже, чтобы войти в магазин:", 
-                   reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True))
+                   reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True),
+                   parse_mode="Markdown")
 
 @dp.message(Command("admin"))
 async def cmd_admin(m: types.Message):
@@ -27,29 +28,32 @@ async def cmd_admin(m: types.Message):
             [InlineKeyboardButton(text="📢 Рассылка", callback_data="adm_bc")],
             [InlineKeyboardButton(text="📊 Статистика", callback_data="adm_stats")]
         ])
-        await m.answer("🔧 Админ-панель:", reply_markup=kb)
+        await m.answer("🔧 *Админ-панель:*", reply_markup=kb, parse_mode="Markdown")
 
 @dp.message(F.web_app_data)
 async def process_pay(m: types.Message):
-    data = json.loads(m.web_app_data.data)
-    # Генерация номера заказа
-    order_id = f"{datetime.datetime.now().strftime('%M%S')}-{m.from_user.id % 1000}"
-    now = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
+    try:
+        data = json.loads(m.web_app_data.data)
+        order_id = f"{datetime.datetime.now().strftime('%M%S')}-{m.from_user.id % 1000}"
+        now = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
 
-    payload = {
-        "id": order_id, "item": data['item'], "price": data['price'],
-        "user": m.from_user.full_name, "username": m.from_user.username or "нет", "time": now
-    }
+        payload = {
+            "id": order_id, "item": data['item'], "price": data['price'],
+            "user": m.from_user.full_name, "username": m.from_user.username or "none", "time": now
+        }
 
-    await bot.send_invoice(
-        m.chat.id, 
-        title=f"Заказ #{order_id}", 
-        description=f"Товар: {data['item']}\nДата: {now}",
-        payload=json.dumps(payload), 
-        currency="XTR", 
-        prices=[LabeledPrice(label="⭐ Stars", amount=int(data['price']))], 
-        provider_token=""
-    )
+        await bot.send_invoice(
+            m.chat.id, 
+            title=f"Заказ #{order_id}", 
+            description=f"📦 Товар: {data['item']}\n📅 Дата: {now}",
+            payload=json.dumps(payload), 
+            currency="XTR", 
+            prices=[LabeledPrice(label="⭐ Stars", amount=int(data['price']))], 
+            provider_token="",
+            payload_inline=True # Для стабильности в Mini Apps
+        )
+    except Exception as e:
+        print(f"Error: {e}")
 
 @dp.pre_checkout_query()
 async def pre_pay(q: PreCheckoutQuery): await q.answer(ok=True)
@@ -58,25 +62,22 @@ async def pre_pay(q: PreCheckoutQuery): await q.answer(ok=True)
 async def pay_ok(m: types.Message):
     info = json.loads(m.successful_payment.invoice_payload)
     
-    # Сообщение клиенту
     await m.answer(
         f"✅ **Оплата принята!**\n\n"
         f"🆔 Заказ: `{info['id']}`\n"
-        f"🛒 Товар: {info['item']}\n"
-        f"Напишите менеджеру {MANAGER} для получения.", 
+        f"🛒 Товар: *{info['item']}*\n"
+        f"👤 Менеджер: {MANAGER}", 
         parse_mode="Markdown"
     )
 
-    # Уведомление админам
     for adm in admins:
         try:
             await bot.send_message(adm, 
-                f"💰 **НОВЫЙ ЗАКАЗ В TIMIX**\n\n"
+                f"💰 **НОВЫЙ ЗАКАЗ**\n\n"
                 f"🆔 ID: `{info['id']}`\n"
-                f"🛒 Товар: {info['item']}\n"
-                f"💵 Сумма: {info['price']} ⭐\n"
-                f"👤 Покупатель: {info['user']} (@{info['username']})\n"
-                f"🕒 Время: {info['time']}", 
+                f"🛒 Товар: *{info['item']}*\n"
+                f"💵 Сумма: `{info['price']}` ⭐\n"
+                f"👤 Покупатель: {info['user']} (@{info['username']})", 
                 parse_mode="Markdown")
         except: pass
 
