@@ -8,7 +8,7 @@ from aiogram.types import LabeledPrice, PreCheckoutQuery, InlineKeyboardMarkup, 
 # --- НАСТРОЙКИ (Railway берет это из Variables) ---
 TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = 8239542728  # ЗАМЕНИ НА СВОЙ ID (узнай в @userinfobot)
-APP_URL = "https://deemiix64-droid.github.io/metrobot/" 
+APP_URL = "https://deemiix64-droid.github.io/metro/" 
 MANAGER = "@timixXmetro"
 
 bot = Bot(token=TOKEN)
